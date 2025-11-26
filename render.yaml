@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: yaroo
+    env: docker
+    dockerfilePath: Dockerfile
+    rootDirectory: backend
+    plan: free
+    envVars:
+      - key: PORT
+        value: 8000
