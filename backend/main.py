@@ -6,7 +6,6 @@ from fastapi.params import Depends
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 import os, json, httpx
-from dotenv import load_dotenv
 import chardet
 from sqlalchemy.ext.asyncio.session import AsyncSession
 from sqlalchemy.future import select
@@ -30,7 +29,6 @@ from models import Base  # your declarative base
 from db_config import engine  # your async engine
 
 
-load_dotenv()
 api_key = os.getenv("OPENAI_API_KEY")
 # ----------------------------
 # FastAPI setup

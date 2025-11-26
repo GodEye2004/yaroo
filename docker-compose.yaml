@@ -6,8 +6,8 @@ services:
     container_name: fastapi_backend
     ports:
       - "8000:8000"
-    environment:
-      DATABASE_URL: postgresql://my_fastapi_db_g313_user:RmOeYuXNjFAJKNa0mnkXnwLUHHL9QWMD@dpg-d430h0ngi27c73fjtkog-a.oregon-postgres.render.com/my_fastapi_db_g313
+    env_file:
+      - .env
     depends_on:
       - db
     networks:
@@ -17,12 +17,10 @@ services:
     image: postgres:16
     container_name: ai_postgres
     restart: always
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: ai_assist
+    env_file:
+      - .env
     ports:
-      - "5433:5433"
+      - "5433:5432" # برای دسترسی از لوکال
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
