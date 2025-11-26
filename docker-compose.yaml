@@ -7,7 +7,7 @@ services:
     ports:
       - "8000:8000"
     environment:
-      DATABASE_URL: postgresql+asyncpg://postgres:postgres@db:5432/ai_assist
+      DATABASE_URL: postgresql://my_fastapi_db_g313_user:RmOeYuXNjFAJKNa0mnkXnwLUHHL9QWMD@dpg-d430h0ngi27c73fjtkog-a.oregon-postgres.render.com/my_fastapi_db_g313
     depends_on:
       - db
     networks:
