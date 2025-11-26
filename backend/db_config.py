@@ -1,14 +1,33 @@
+import os
+import ssl
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
-import os
 
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql+asyncpg://postgres:mo90mo80@localhost:5432/ai_assist")
-# DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://ai_assist_db_user:bRVilvyHJNV83skNohDDag9VcGQ5kshZ@dpg-d40u25f5r7bs73881ur0-a/ai_assist_db")
+# Get DATABASE_URL from environment
+DATABASE_URL = os.getenv("DATABASE_URL")
+if not DATABASE_URL:
+    raise ValueError("❌ DATABASE_URL environment variable not set!")
 
+# Make sure it uses asyncpg
+if DATABASE_URL.startswith("postgresql://"):
+    DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
 
-engine = create_async_engine(DATABASE_URL)
-AsyncSessionLocal = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+# Configure SSL for Render-hosted DB
+ssl_context = ssl.create_default_context()
+engine = create_async_engine(
+    DATABASE_URL,
+    echo=True,
+    connect_args={"ssl": ssl_context}  # Required for Render
+)
 
+# Async session factory
+AsyncSessionLocal = sessionmaker(
+    bind=engine,
+    class_=AsyncSession,
+    expire_on_commit=False
+)
+
+# Dependency for FastAPI routes
 async def get_db():
     async with AsyncSessionLocal() as session:
         yield session
