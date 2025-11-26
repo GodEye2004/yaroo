@@ -14,10 +14,14 @@ if DATABASE_URL.startswith("postgresql://"):
 
 # Configure SSL for Render-hosted DB
 ssl_context = ssl.create_default_context()
+# For asyncpg, server_hostname must be set for SNI
+ssl_context.check_hostname = True
+ssl_context.verify_mode = ssl.CERT_REQUIRED
+
 engine = create_async_engine(
     DATABASE_URL,
     echo=True,
-    connect_args={"ssl": ssl_context}  # Required for Render
+    connect_args={"ssl": ssl_context}
 )
 
 # Async session factory
@@ -31,6 +35,7 @@ AsyncSessionLocal = sessionmaker(
 async def get_db():
     async with AsyncSessionLocal() as session:
         yield session
+
 
 
 # from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
