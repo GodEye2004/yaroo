@@ -1,8 +1,10 @@
+# Use Python 3.11 slim
 FROM python:3.11-slim
 
+# Set working directory
 WORKDIR /app
 
-# Install system dependencies for OpenCV, Tesseract, and PDF processing
+# Install system dependencies for PDF, OCR, OpenCV, etc.
 RUN apt-get update && apt-get install -y \
     build-essential \
     tesseract-ocr \
@@ -13,18 +15,12 @@ RUN apt-get update && apt-get install -y \
     wget \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies
-COPY ./requirements.txt .
+# Copy requirements and install Python dependencies
+COPY requirements.txt .
+RUN pip install --upgrade pip
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Install NLTK data - ADD THE MISSING PACKAGES HERE
-RUN python3 -c "import nltk; \
-    nltk.download('punkt'); \
-    nltk.download('punkt_tab'); \
-    nltk.download('averaged_perceptron_tagger'); \
-    nltk.download('averaged_perceptron_tagger_eng')"
-
-# Install additional packages for OCR and unstructured PDFs
+# Install additional packages (if needed)
 RUN pip install --no-cache-dir \
     unstructured \
     unstructured-inference \
@@ -41,11 +37,20 @@ RUN pip install --no-cache-dir \
     hazm \
     python-dotenv \
     asyncpg \
-    sqlalchemy[asyncio]
+    "sqlalchemy[asyncio]"
+
+# Download NLTK data
+RUN python3 -c "import nltk; \
+    nltk.download('punkt'); \
+    nltk.download('punkt_tab'); \
+    nltk.download('averaged_perceptron_tagger'); \
+    nltk.download('averaged_perceptron_tagger_eng')"
 
 # Copy backend code
 COPY . .
 
+# Expose port
 EXPOSE 8000
 
+# Run app with uvicorn
 CMD ["uvicorn", "test:app", "--host", "0.0.0.0", "--port", "8000"]
