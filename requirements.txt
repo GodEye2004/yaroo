@@ -13,7 +13,7 @@ pytesseract
 pdfplumber==0.10.0
 python-docx
 pdf2image
-unstructured==0.18.21
+unstructured==0.14.6
 unstructured-pytesseract>=0.2.0
 unstructured-inference==0.7.32
 fuzzywuzzy
@@ -22,3 +22,4 @@ numpy<2
 langchain==0.1.16
 langchain-community
 matplotlib>=3.7
+pi_heif
