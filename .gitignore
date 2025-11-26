@@ -1,0 +1,30 @@
+# Virtual environments
+venv/
+.venv/
+venv311/
+hazm_env/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Logs
+*.log
+
+# Environment files
+.env
+*.env
+
+# Backup files
+*.bak
+*.swp
+*.tmp
+
+# macOS
+.DS_Store
+
+# IDEs
+.vscode/
+.idea/
