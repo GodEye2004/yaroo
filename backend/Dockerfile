@@ -1,10 +1,10 @@
-# Use Python 3.11 slim
+# Use Python 3.11 slim image
 FROM python:3.11-slim
 
-# Set working directory
+# Set working directory inside the container
 WORKDIR /app
 
-# Install system dependencies for PDF, OCR, OpenCV, etc.
+# Install system dependencies
 RUN apt-get update && apt-get install -y \
     build-essential \
     tesseract-ocr \
@@ -15,42 +15,19 @@ RUN apt-get update && apt-get install -y \
     wget \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements and install Python dependencies
+# Copy requirements file and install Python dependencies
 COPY requirements.txt .
 RUN pip install --upgrade pip
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Install additional packages (if needed)
-RUN pip install --no-cache-dir \
-    unstructured \
-    unstructured-inference \
-    langchain \
-    langchain-community \
-    pillow \
-    opencv-python-headless \
-    easyocr \
-    matplotlib \
-    beautifulsoup4 \
-    chardet \
-    python-docx \
-    httpx \
-    hazm \
-    python-dotenv \
-    asyncpg \
-    "sqlalchemy[asyncio]"
+# Install NLTK data
+RUN python3 -m nltk.downloader punkt punkt_tab averaged_perceptron_tagger averaged_perceptron_tagger_eng
 
-# Download NLTK data
-RUN python3 -c "import nltk; \
-    nltk.download('punkt'); \
-    nltk.download('punkt_tab'); \
-    nltk.download('averaged_perceptron_tagger'); \
-    nltk.download('averaged_perceptron_tagger_eng')"
-
-# Copy backend code
+# Copy the rest of the backend code
 COPY . .
 
-# Expose port
+# Expose FastAPI port
 EXPOSE 8000
 
-# Run app with uvicorn
+# Start the FastAPI app using Uvicorn
 CMD ["uvicorn", "test:app", "--host", "0.0.0.0", "--port", "8000"]
