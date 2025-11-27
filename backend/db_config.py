@@ -2,17 +2,15 @@ import os
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
 
-# Get DATABASE_URL from environment
 DATABASE_URL = os.getenv("DATABASE_URL")
 if not DATABASE_URL:
-    raise ValueError("❌ DATABASE_URL environment variable not set!")
+    raise ValueError("❌ DATABASE_URL is not set!")
 
-# Ensure asyncpg engine
-if DATABASE_URL.startswith("postgresql://"):
+# Convert to asyncpg
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql+asyncpg://", 1)
+elif DATABASE_URL.startswith("postgresql://"):
     DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
-
-# IMPORTANT: Render requires this at the end
-# ?sslmode=require must be in your env var already
 
 engine = create_async_engine(
     DATABASE_URL,
