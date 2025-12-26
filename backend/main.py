@@ -522,12 +522,23 @@ async def get_extracted_data(user_id: str):
         )
 
 
+# if __name__ == "__main__":
+#     uvicorn.run(
+#         "main:app",
+#         host="0.0.0.0",
+#         port=8000,
+#         timeout_keep_alive=120,
+#         limit_concurrency=50,
+#         limit_max_requests=500
+#     )
+
+# در انتهای main.py
 if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 8000))
     uvicorn.run(
         "main:app",
         host="0.0.0.0",
-        port=8000,
+        port=port,
         timeout_keep_alive=120,
-        limit_concurrency=50,
-        limit_max_requests=500
+        log_level="info"
     )

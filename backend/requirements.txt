@@ -1,25 +1,23 @@
-# requirements.txt - با نسخه‌های دقیق
+azure-core==1.30.0
+azure-identity==1.15.0
+azure-ai-inference==1.0.0b4
+    # سپس بقیه
 fastapi==0.104.1
 uvicorn[standard]==0.24.0
-python-dotenv==1.0.0
 httpx==0.24.1
+supabase==1.1.1
+    # و بقیه
+python-dotenv==1.0.0
 python-multipart==0.0.6
 chardet==5.2.0
 beautifulsoup4==4.12.2
 hazm==0.9.1
-supabase==1.1.1
-# Azure SDK - همه با هم سازگار
-azure-core==1.30.0
-azure-ai-inference==1.0.0b4
-azure-identity==1.15.0
-# ابزارهای پردازش متن و PDF
+    # langchain با نسخه سازگار community
 langchain==0.1.16
-langchain-community==0.0.20
+langchain-community==0.0.32
 PyPDF2==3.0.1
 python-docx==1.1.0
-# data science
 numpy==1.26.3
 scikit-learn==1.5.2
 pandas==2.1.4
-# پکیج‌های اضافی برای PDF (اگر نیاز دارید)
-pymupdf==1.23.26
+pypdf==3.17.4
