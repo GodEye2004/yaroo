@@ -1,0 +1,56 @@
+# Dockerfile - با نسخه‌های سازگار
+FROM python:3.11-slim
+
+# نصب dependencies سیستمی
+RUN apt-get update && apt-get install -y \
+    gcc \
+    g++ \
+    libpq-dev \
+    poppler-utils \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# کپی requirements
+COPY requirements.txt .
+
+# نصب پکیج‌ها به ترتیب برای جلوگیری از conflict
+RUN pip install --upgrade pip && \
+    pip install --no-cache-dir \
+    # ابتدا azure packages
+    azure-core==1.30.0 \
+    azure-identity==1.15.0 \
+    azure-ai-inference==1.0.0b4 \
+    # سپس بقیه
+    fastapi==0.104.1 \
+    uvicorn[standard]==0.24.0 \
+    httpx==0.24.1 \
+    supabase==1.1.1 \
+    # و بقیه
+    python-dotenv==1.0.0 \
+    python-multipart==0.0.6 \
+    chardet==5.2.0 \
+    beautifulsoup4==4.12.2 \
+    hazm==0.9.1 \
+    # langchain با نسخه سازگار community
+    langchain==0.1.16 \
+    langchain-community==0.0.32 \
+    PyPDF2==3.0.1 \
+    python-docx==1.1.0 \
+    numpy==1.26.3 \
+    scikit-learn==1.5.2 \
+    pandas==2.1.4\
+    pypdf==3.17.4
+# کپی کد
+COPY . .
+
+# ساختار دایرکتوری
+RUN mkdir -p /app/uploads /app/temp
+
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONPATH=/app
+
+EXPOSE 8000
+
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
