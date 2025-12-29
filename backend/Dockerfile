@@ -41,7 +41,13 @@ RUN pip install --upgrade pip && \
     numpy==1.26.3 \
     scikit-learn==1.5.2 \
     pandas==2.1.4\
-    pypdf==3.17.4
+    pypdf==3.17.4\
+    pymupdf==1.23.8\
+    pdfplumber==0.10.3\
+    arabic-reshaper==3.0.0\
+    python-bidi==0.4.2 \
+    camelot-py
+
 # کپی کد
 COPY . .
 

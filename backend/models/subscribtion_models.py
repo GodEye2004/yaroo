@@ -5,7 +5,7 @@ from typing import Optional
 class SubscriptionPlan(BaseModel):
     name: str
     price: int
-    pages: int
+    max_pages: int  # تغییر از pages به max_pages
     description: str
 
 class UserSubscription(BaseModel):
@@ -15,24 +15,24 @@ class UserSubscription(BaseModel):
     last_reset: datetime
     is_active: bool = True
 
-# تعریف پلن‌های موجود
+# تعریف پلن‌های موجود با محدودیت تعداد صفحات
 PLANS = {
     "free": SubscriptionPlan(
         name="رایگان",
         price=0,
-        pages=3,
-        description="3 صفحه اول رایگان در ماه"
+        max_pages=5,  # حداکثر 5 صفحه
+        description="حداکثر ۵ صفحه در ماه"
     ),
     "basic": SubscriptionPlan(
         name="پایه",
         price=50000,
-        pages=50,
-        description="ماهانه 50,000 تومان برای 50 صفحه"
+        max_pages=50,  # حداکثر 50 صفحه
+        description="ماهانه ۵۰,۰۰۰ تومان برای ۵۰ صفحه"
     ),
     "pro": SubscriptionPlan(
         name="حرفه‌ای",
         price=200000,
-        pages=300,
-        description="ماهانه 200,000 تومان برای 300 صفحه"
-    )
+        max_pages=300,  # حداکثر 300 صفحه
+        description="ماهانه ۲۰۰,۰۰۰ تومان برای ۳۰۰ صفحه"
+    ),
 }

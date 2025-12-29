@@ -49,15 +49,19 @@ async def check_and_reset_subscription(user_id: str):
         if (now - last_reset).days >= 30:
             plan = PLANS.get(subscription.plan_type)
             if plan:
+                # برای رایگان، max_pages است ولی در صفحات باقیمانده برای رایگان مهم نیست
+                # برای پلن‌های پولی، صفحات باقیمانده را برابر max_pages قرار می‌دهیم
+                pages_to_reset = plan.max_pages if subscription.plan_type != "free" else 0
+                
                 supabase.table("subscriptions").update({
-                    "pages_remaining": plan.pages,
+                    "pages_remaining": pages_to_reset,
                     "last_reset": now.isoformat()
                 }).eq("user_id", user_id).execute()
                 
                 return UserSubscription(
                     user_id=user_id,
                     plan_type=subscription.plan_type,
-                    pages_remaining=plan.pages,
+                    pages_remaining=pages_to_reset,
                     last_reset=now,
                     is_active=True
                 )
@@ -65,7 +69,7 @@ async def check_and_reset_subscription(user_id: str):
         return subscription
     except Exception as e:
         print(f"Error in check_and_reset_subscription: {e}")
-        return subscription  # حتی اگر خطا هم رخ داد، subscription فعلی را برگردان
+        return subscription
 
 async def create_or_update_subscription(user_id: str, plan_type: str):
     """ایجاد یا به‌روزرسانی اشتراک کاربر"""
@@ -74,6 +78,12 @@ async def create_or_update_subscription(user_id: str, plan_type: str):
         if not plan:
             return False, "پلن انتخابی معتبر نیست"
 
+        # تعیین صفحات باقیمانده بر اساس پلن
+        if plan_type == "free":
+            pages_remaining = 0  # کاربران رایگان صفحات کسر نمی‌شود
+        else:
+            pages_remaining = plan.max_pages
+
         # بررسی وجود اشتراک قبلی
         existing = await get_user_subscription(user_id)
 
@@ -81,7 +91,7 @@ async def create_or_update_subscription(user_id: str, plan_type: str):
             # به‌روزرسانی اشتراک موجود
             supabase.table("subscriptions").update({
                 "plan_type": plan_type,
-                "pages_remaining": plan.pages,
+                "pages_remaining": pages_remaining,
                 "last_reset": datetime.utcnow().isoformat(),
                 "updated_at": datetime.utcnow().isoformat()
             }).eq("user_id", user_id).execute()
@@ -90,7 +100,7 @@ async def create_or_update_subscription(user_id: str, plan_type: str):
             supabase.table("subscriptions").insert({
                 "user_id": user_id,
                 "plan_type": plan_type,
-                "pages_remaining": plan.pages,
+                "pages_remaining": pages_remaining,
                 "last_reset": datetime.utcnow().isoformat(),
                 "created_at": datetime.utcnow().isoformat(),
                 "updated_at": datetime.utcnow().isoformat()
@@ -102,11 +112,15 @@ async def create_or_update_subscription(user_id: str, plan_type: str):
         return False, str(e)
 
 async def deduct_pages(user_id: str, pages_used: int):
-    """کسر صفحات استفاده شده از اشتراک کاربر"""
+    """کسر صفحات استفاده شده از اشتراک کاربر (فقط برای پلن‌های پولی)"""
     try:
         subscription = await get_user_subscription(user_id)
         if not subscription:
             return False, "اشتراکی یافت نشد"
+
+        # کاربران رایگان صفحات کسر نمی‌شود
+        if subscription.plan_type == "free":
+            return True, 0
 
         new_pages = max(0, subscription.pages_remaining - pages_used)
 
@@ -118,4 +132,29 @@ async def deduct_pages(user_id: str, pages_used: int):
         return True, new_pages
     except Exception as e:
         print(f"Error deducting pages: {e}")
+        return False, str(e)
+
+async def can_upload_file(user_id: str, file_pages_count: int) -> tuple[bool, str]:
+    """بررسی آیا کاربر می‌تواند فایل را آپلود کند"""
+    try:
+        subscription = await check_and_reset_subscription(user_id)
+        if not subscription:
+            return False, "اشتراکی یافت نشد"
+        
+        plan = PLANS.get(subscription.plan_type)
+        if not plan:
+            return False, "پلن اشتراک نامعتبر است"
+        
+        # بررسی محدودیت تعداد صفحات
+        if file_pages_count > plan.max_pages:
+            return False, f"فایل شما {file_pages_count} صفحه دارد. در پلن {plan.name} فقط می‌توانید فایل‌های حداکثر {plan.max_pages} صفحه آپلود کنید."
+        
+        # برای کاربران پولی، بررسی صفحات باقیمانده
+        if subscription.plan_type != "free":
+            if file_pages_count > subscription.pages_remaining:
+                return False, f"صفحات کافی در اشتراک شما وجود ندارد. نیاز: {file_pages_count} صفحه، موجود: {subscription.pages_remaining} صفحه"
+        
+        return True, "مجاز است"
+    except Exception as e:
+        print(f"Error in can_upload_file: {e}")
         return False, str(e)

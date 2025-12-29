@@ -30,10 +30,17 @@ async def select_subscription(request: Request):
     success, message = await create_or_update_subscription(user_id, plan_type)
     
     if success:
+        plan = PLANS[plan_type]
         return {
             "success": True,
             "message": message,
-            "plan": PLANS[plan_type].dict(),
+            "plan": {
+                "type": plan_type,
+                "name": plan.name,
+                "price": plan.price,
+                "max_pages": plan.max_pages,
+                "description": plan.description
+            },
             "user_id": user_id
         }
     else:
@@ -49,15 +56,38 @@ async def get_subscription(user_id: str):
     
     if subscription:
         plan = PLANS.get(subscription.plan_type)
-        return {
-            "user_id": user_id,
-            "plan": plan.dict() if plan else None,
-            "subscription": subscription.dict(),
-            "has_subscription": True
-        }
-    else:
-        return {
-            "user_id": user_id,
-            "has_subscription": False,
-            "message": "هنوز اشتراکی انتخاب نکرده‌اید"
-        }
+        
+        # تعیین محدودیت‌ها برای نمایش
+        if plan:
+            plan_info = {
+                "type": subscription.plan_type,
+                "name": plan.name,
+                "price": plan.price,
+                "max_pages": plan.max_pages,
+                "description": plan.description
+            }
+            
+            # برای کاربران رایگان، همیشه 0 صفحه باقیمانده نشان می‌دهیم
+            pages_remaining = subscription.pages_remaining if subscription.plan_type != "free" else 5
+            
+            return {
+                "user_id": user_id,
+                "plan": plan_info,
+                "subscription": {
+                    "plan_type": subscription.plan_type,
+                    "pages_remaining": pages_remaining,
+                    "last_reset": subscription.last_reset.isoformat() if hasattr(subscription.last_reset, 'isoformat') else str(subscription.last_reset),
+                    "is_active": subscription.is_active
+                },
+                "has_subscription": True,
+                "limits": {
+                    "max_pages_per_file": plan.max_pages,
+                    "description": f"حداکثر {plan.max_pages} صفحه در هر فایل"
+                }
+            }
+    
+    return {
+        "user_id": user_id,
+        "has_subscription": False,
+        "message": "هنوز اشتراکی انتخاب نکرده‌اید"
+    }

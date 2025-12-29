@@ -9,13 +9,15 @@ import PyPDF2
 from io import BytesIO
 import chardet
 from docx import Document
-from langchain_community.document_loaders import PyPDFLoader
 
 from services.subscribtion_service import (
     check_and_reset_subscription, 
-    deduct_pages
+    deduct_pages,
+    can_upload_file,
+    PLANS
 )
-from services.text_processing import deep_clean_farsi_text, looks_garbled
+from services.pdf_extraction import process_pdf_advanced  # ✅ تغییر اینجا
+from services.text_processing import deep_clean_farsi_text
 from db_config import supabase
 
 router = APIRouter()
@@ -34,15 +36,21 @@ async def upload_json(
         category: str = Form(...),
         file: UploadFile = File(...)
 ):
-    print("UPLOAD_JSON RECEIVED CATEGORY:", repr(category))
+    print("=" * 60)
+    print(f"📥 UPLOAD_JSON RECEIVED")
+    print(f"👤 User ID: {user_id}")
+    print(f"📂 Category: {category}")
+    print(f"📄 Filename: {file.filename}")
 
     # 1. بررسی اشتراک کاربر
     subscription = await check_and_reset_subscription(user_id)
     if not subscription:
         return JSONResponse(
-            status_code=402,  # Payment Required
+            status_code=402,
             content={"error": "لطفا ابتدا اشتراک خود را انتخاب کنید"}
         )
+    
+    print(f"✅ اشتراک کاربر: {subscription.plan_type}")
 
     # 2. خواندن فایل و محاسبه تعداد صفحات
     content = await file.read()
@@ -57,138 +65,53 @@ async def upload_json(
                 status_code=400,
                 content={"error": "فایل PDF نامعتبر است یا قابل خواندن نیست"}
             )
+    
+    print(f"📊 تعداد صفحات فایل: {pages_count}")
 
-    # 3. اعمال محدودیت‌های اشتراک
-    if subscription.plan_type == "free":
-        # برای کاربران رایگان، فقط 3 صفحه اول
-        max_pages = 3
-        if pages_count > max_pages:
-            # فقط 3 صفحه اول را پردازش کن
-            pages_to_process = max_pages
-            pages_to_deduct = 0  # کاربران رایگان صفحات کسر نمی‌شود
-            warning = f"توجه: در پلن رایگان فقط {max_pages} صفحه اول پردازش می‌شود (از {pages_count} صفحه)"
-        else:
-            pages_to_process = pages_count
-            pages_to_deduct = pages_count
-            warning = None
-    else:
-        # برای کاربران پرداخت‌کننده
-        if pages_count > subscription.pages_remaining:
-            return JSONResponse(
-                status_code=402,
-                content={
-                    "error": f"صفحات کافی در اشتراک شما وجود ندارد",
-                    "details": {
-                        "required_pages": pages_count,
-                        "available_pages": subscription.pages_remaining,
-                        "plan": subscription.plan_type
-                    }
-                }
-            )
-        pages_to_process = pages_count
-        pages_to_deduct = pages_count
-        warning = None
+    # 3. بررسی آیا کاربر می‌تواند این فایل را آپلود کند
+    can_upload, message = await can_upload_file(user_id, pages_count)
+    if not can_upload:
+        return JSONResponse(
+            status_code=402,
+            content={"error": message}
+        )
+    
+    print(f"✅ کاربر مجاز به آپلود فایل است")
 
-    # 4. پردازش فایل (با محدودیت صفحات برای کاربران رایگان)
+    # 4. پردازش فایل
     json_data = {}
     try:
         if filename.endswith(".json"):
             json_data = json.loads(content.decode("utf-8", errors="ignore"))
 
         elif filename.endswith(".pdf"):
-            print(f"📄 شروع پردازش PDF: {file.filename}")
-            print(f"📦 صفحات کل: {pages_count}")
-            print(f"📄 صفحات قابل پردازش: {pages_to_process}")
-
-            with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp_pdf:
-                tmp_pdf.write(content)
-                pdf_path = tmp_pdf.name
-
-            context = ""
-            context_blocks = []
-            use_ocr = False
-
-            # پردازش PDF با محدودیت صفحات
-            try:
-                reader = PyPDFLoader(pdf_path)
-                pages = reader.load()
-
-                # محدود کردن صفحات برای کاربران رایگان
-                if subscription.plan_type == "free" and len(pages) > pages_to_process:
-                    pages = pages[:pages_to_process]
-
-                print(f"✅ تعداد صفحات پردازش شده: {len(pages)}")
-
-                for page_num, page in enumerate(pages, 1):
-                    page_text = page.page_content
-                    cleaned_text = deep_clean_farsi_text(page_text)
-                    if cleaned_text:
-                        context += cleaned_text + "\n\n"
-                        context_blocks.append({
-                            "page": page_num,
-                            "text": cleaned_text,
-                            "char_count": len(cleaned_text)
-                        })
-
-                if len(context.strip()) < 50 or looks_garbled(context):
-                    use_ocr = True
-
-            except Exception as e:
-                print(f"❌ خطا در PyPDFLoader: {str(e)}")
-                use_ocr = True
-
-            # مرحله 2: اگر نیاز به OCR بود، از PyMuPDF استفاده می‌کنیم
-            if use_ocr:
-                print("🔍 نیاز به OCR تشخیص داده شد...")
-                try:
-                    # تلاش با PyMuPDF اگر نصب باشد
-                    try:
-                        import fitz  # PyMuPDF
-                        print("استفاده از PyMuPDF برای استخراج متن...")
-                        doc = fitz.open(pdf_path)
-                        
-                        # محدود کردن صفحات برای کاربران رایگان
-                        if subscription.plan_type == "free" and pages_count > 3:
-                            page_range = range(min(3, len(doc)))
-                        else:
-                            page_range = range(len(doc))
-                            
-                        for page_num in page_range:
-                            page = doc.load_page(page_num)
-                            text = page.get_text()
-                            if text:
-                                cleaned_text = deep_clean_farsi_text(text)
-                                context += cleaned_text + "\n\n"
-                                context_blocks.append({
-                                    "page": page_num + 1,
-                                    "text": cleaned_text,
-                                    "char_count": len(cleaned_text),
-                                    "method": "pymupdf"
-                                })
-                        doc.close()
-                    except ImportError:
-                        print("PyMuPDF نصب نیست، ادامه با متن استخراج شده...")
-                except Exception as e:
-                    print(f"❌ خطا در استخراج OCR: {str(e)}")
-
-            # حذف فایل موقت
-            try:
-                os.unlink(pdf_path)
-            except Exception as e:
-                print(f"⚠️ خطا در حذف فایل موقت: {str(e)}")
-
+            print(f"📄 شروع پردازش پیشرفته PDF...")
+            
+            # تعیین محدودیت صفحات برای کاربران رایگان
+            max_pages = None
+            if subscription.plan_type == "free":
+                plan = PLANS.get("free")
+                if plan and pages_count > plan.max_pages:
+                    max_pages = plan.max_pages
+                    print(f"⚠️ محدود کردن به {max_pages} صفحه اول (پلن رایگان)")
+            
+            # استفاده از پردازشگر پیشرفته
+            processed = await process_pdf_advanced(content, max_pages)
+            
             json_data = {
                 "filename": file.filename,
                 "category": category.strip().lower(),
-                "extraction_method": "ocr" if use_ocr else "text",
-                "total_characters": len(context),
-                "total_blocks": len(context_blocks),
+                "extraction_method": processed["extraction_method"],
+                "total_characters": processed["total_characters"],
+                "total_blocks": processed["total_blocks"],
                 "pages_total": pages_count,
-                "pages_processed": pages_to_process,
-                "full_text": context,
-                "blocks": context_blocks,
+                "pages_processed": len(processed["blocks"]),
+                "full_text": processed["full_text"],
+                "blocks": processed["blocks"],
+                "quality": processed.get("quality", "unknown"),
                 "metadata": {
-                    "file_size_bytes": len(content)
+                    "file_size_bytes": len(content),
+                    "extraction_quality": processed.get("quality", "unknown")
                 }
             }
 
@@ -209,11 +132,16 @@ async def upload_json(
                 content={"error": "فرمت فایل پشتیبانی نمی‌شود. فقط JSON, PDF, TXT, DOCX."}
             )
 
-        # 5. کسر صفحات از اشتراک (به جز کاربران رایگان)
-        if subscription.plan_type != "free" and pages_to_deduct > 0:
-            success, result = await deduct_pages(user_id, pages_to_deduct)
+        # 5. کسر صفحات از اشتراک (فقط برای کاربران پولی)
+        if subscription.plan_type != "free":
+            print(f"💰 کسر {pages_count} صفحه از اشتراک کاربر...")
+            success, result = await deduct_pages(user_id, pages_count)
             if not success:
                 print(f"⚠️ خطا در کسر صفحات: {result}")
+            else:
+                print(f"✅ {pages_count} صفحه کسر شد. صفحات باقیمانده: {result}")
+        else:
+            print(f"ℹ️ صفحات کسر نمی‌شود (پلن رایگان)")
 
         # 6. ذخیره داده‌ها در Supabase
         related_data = []
@@ -232,31 +160,37 @@ async def upload_json(
                 "related_sources": related_data
             }).execute()
 
+        plan = PLANS.get(subscription.plan_type)
         response = {
-            "message": f"File '{file.filename}' processed successfully ✅",
+            "message": f"فایل '{file.filename}' با موفقیت آپلود شد ✅",
             "category": category,
             "file_type": filename.split('.')[-1],
             "subscription_info": {
                 "plan": subscription.plan_type,
-                "pages_used": pages_to_deduct,
-                "pages_remaining": subscription.pages_remaining - pages_to_deduct if subscription.plan_type != "free" else "unlimited",
-                "pages_processed": pages_to_process,
-                "pages_total": pages_count
+                "plan_name": plan.name if plan else "نامشخص",
+                "pages_used": pages_count if subscription.plan_type != "free" else 0,
+                "pages_remaining": subscription.pages_remaining - pages_count if subscription.plan_type != "free" else 0,
+                "max_allowed_pages": plan.max_pages if plan else 0,
+                "file_pages": pages_count,
+                "upload_status": "موفق"
             },
             "extraction_summary": {
                 "method": json_data.get("extraction_method", "unknown"),
+                "quality": json_data.get("quality", "unknown"),
                 "total_characters": json_data.get("total_characters", 0),
-                "total_blocks": json_data.get("total_blocks", 0)
+                "total_blocks": json_data.get("total_blocks", 0),
+                "pages_processed": json_data.get("pages_processed", 0)
             },
-            "json_data_preview": json.dumps(json_data, ensure_ascii=False)[:500],
+            "json_data_preview": json.dumps(json_data, ensure_ascii=False)[:500] if isinstance(json_data, dict) else str(json_data)[:500],
         }
 
-        if warning:
-            response["warning"] = warning
-
+        print("✅ آپلود با موفقیت انجام شد")
+        print("=" * 60)
+        
         return response
 
     except Exception as e:
-        print(f"ERROR in upload_json: {str(e)}")
+        print(f"❌ ERROR in upload_json: {str(e)}")
         traceback.print_exc()
+        print("=" * 60)
         return JSONResponse(status_code=500, content={"error": f"Processing failed: {str(e)}"})
