@@ -26,7 +26,6 @@ RUN pip install --upgrade pip && \
     fastapi==0.104.1 \
     uvicorn[standard]==0.24.0 \
     httpx==0.24.1 \
-    supabase==1.1.1 \
     # و بقیه
     python-dotenv==1.0.0 \
     python-multipart==0.0.6 \

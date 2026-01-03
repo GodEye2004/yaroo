@@ -10,25 +10,16 @@ router = APIRouter()
 
 @router.post("/select_subscription")
 async def select_subscription(request: Request):
-    """انتخاب یا خرید اشتراک توسط کاربر"""
     body = await request.json()
     user_id = body.get("user_id")
     plan_type = body.get("plan_type")
-    
+
     if not user_id or not plan_type:
-        return JSONResponse(
-            status_code=400,
-            content={"error": "user_id و plan_type الزامی هستند"}
-        )
-    
+        return JSONResponse(status_code=400, content={"error": "user_id و plan_type الزامی هستند"})
     if plan_type not in PLANS:
-        return JSONResponse(
-            status_code=400,
-            content={"error": "پلن انتخابی معتبر نیست"}
-        )
-    
+        return JSONResponse(status_code=400, content={"error": "پلن انتخابی معتبر نیست"})
+
     success, message = await create_or_update_subscription(user_id, plan_type)
-    
     if success:
         plan = PLANS[plan_type]
         return {
@@ -44,10 +35,9 @@ async def select_subscription(request: Request):
             "user_id": user_id
         }
     else:
-        return JSONResponse(
-            status_code=400,
-            content={"error": message}
-        )
+        return JSONResponse(status_code=400, content={"error": message})
+    
+    
 
 @router.get("/get_subscription/{user_id}")
 async def get_subscription(user_id: str):

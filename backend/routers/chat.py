@@ -3,7 +3,11 @@ from fastapi.responses import JSONResponse
 from services.llm_service import github_llm
 from services.subscribtion_service import check_and_reset_subscription
 from utils.helpers import truncate_text
-from db_config import supabase
+from db_config import AsyncSessionLocal
+from sqlalchemy import text
+import json
+from sqlalchemy import text
+import json
 
 router = APIRouter()
 
@@ -13,6 +17,7 @@ MAX_MEMORY = 5
 
 @router.post("/ask")
 async def ask(request: Request):
+
     body = await request.json()
     user_id = body.get("user_id")
     question = body.get("question")
@@ -26,15 +31,36 @@ async def ask(request: Request):
             content={"error": "لطفا ابتدا اشتراک خود را انتخاب کنید"}
         )
 
-    # ✅ تغییر: گرفتن داده از Supabase
-    result = supabase.table("ai_assist").select("*").eq("user_id", user_id).execute()
-    if not result.data:
+    # ✅ گرفتن داده از PostgreSQL با استفاده از AsyncSessionLocal
+    async with AsyncSessionLocal() as session:
+        try:
+            q = text("SELECT * FROM ai_assist WHERE user_id = :user_id LIMIT 1")
+            result = await session.execute(q, {"user_id": user_id})
+            row = result.fetchone()
+        except Exception as e:
+            print(f"❌ خطا در اجرای کوئری: {e}")
+            return JSONResponse(status_code=500, content={"error": f"DB query failed: {str(e)}"})
+
+    if not row:
         return JSONResponse(status_code=400, content={"error": "No data for this user."})
 
-    record = result.data[0]
+    # row._mapping را به dict تبدیل می‌کنیم تا دسترسی راحت‌تر شود
+    record = dict(row._mapping)
+
+    # اگر ستون‌های JSON به صورت متن آمده بودند، آن‌ها را تبدیل کن
+    def ensure_json(v):
+        if isinstance(v, str):
+            try:
+                return json.loads(v)
+            except Exception:
+                return v
+        return v
+
+    record["data"] = ensure_json(record.get("data"))
+    record["related_sources"] = ensure_json(record.get("related_sources"))
 
     # ✅ محدود کردن داده‌ها برای جلوگیری از خطای token limit
-    data_to_format = record["data"]
+    data_to_format = record.get("data")
 
     # اگر full_text وجود دارد، آن را محدود کن
     if isinstance(data_to_format, dict) and "full_text" in data_to_format:
@@ -69,7 +95,7 @@ async def ask(request: Request):
     prompt = f"""
     تو یک دستیار هوشمند فارسی هستی که همیشه با دقت، منطق و لحن طبیعی پاسخ می‌دی. هدف تو اینه که کاربر حس کنه با یه متخصص صمیمی و باتجربه در حال گفت‌وگوئه.
 
-    📂 دسته‌بندی: {record["category"]}
+    📂 دسته‌بندی: {record.get("category")}
     📋 داده‌ها: {formatted_data}
     {web_sources}
     💬 حافظه گفتگو: {conversation_context}
@@ -96,20 +122,41 @@ async def ask(request: Request):
 @router.get("/get_extracted_data/{user_id}")
 async def get_extracted_data(user_id: str):
     """ دریافت داده‌های JSON استخراج شده برای یک کاربر """
+
     print(f"\n🔍 درخواست دریافت داده برای user_id: {user_id}")
     try:
-        result = supabase.table("ai_assist").select("*").eq("user_id", user_id).execute()
-        if not result.data:
+        async with AsyncSessionLocal() as session:
+            q = text("SELECT * FROM ai_assist WHERE user_id = :user_id LIMIT 1")
+            result = await session.execute(q, {"user_id": user_id})
+            row = result.fetchone()
+
+        if not row:
             print(f"❌ هیچ داده‌ای برای user_id={user_id} یافت نشد")
             return JSONResponse(
                 status_code=404,
                 content={"error": f"No data found for user_id: {user_id}"}
             )
 
-        record = result.data[0]
+        record = dict(row._mapping)
+
+        # اگر داده‌ها به صورت JSON رشته‌ای بودند، آن‌ها را بارگذاری کن
+        def ensure_json(v):
+            if isinstance(v, str):
+                try:
+                    return json.loads(v)
+                except Exception:
+                    return v
+            return v
+
+        record["data"] = ensure_json(record.get("data"))
+        record["related_sources"] = ensure_json(record.get("related_sources", []))
+
         print(f"✅ داده یافت شد:")
         print(f" - Category: {record.get('category')}")
-        print(f" - Data keys: {list(record.get('data', {}).keys())}")
+        try:
+            print(f" - Data keys: {list(record.get('data', {}).keys())}")
+        except Exception:
+            print(" - Data is not a dict")
 
         return {
             "user_id": user_id,
@@ -119,7 +166,6 @@ async def get_extracted_data(user_id: str):
         }
     except Exception as e:
         print(f"❌ خطا در دریافت داده: {str(e)}")
-        traceback.print_exc()
         return JSONResponse(
             status_code=500,
             content={"error": f"Failed to retrieve data: {str(e)}"}

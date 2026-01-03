@@ -1,12 +1,5 @@
 from pydantic import BaseModel
 from datetime import datetime
-from typing import Optional
-
-class SubscriptionPlan(BaseModel):
-    name: str
-    price: int
-    max_pages: int  # تغییر از pages به max_pages
-    description: str
 
 class UserSubscription(BaseModel):
     user_id: str
@@ -15,24 +8,15 @@ class UserSubscription(BaseModel):
     last_reset: datetime
     is_active: bool = True
 
-# تعریف پلن‌های موجود با محدودیت تعداد صفحات
+class Plan(BaseModel):
+    name: str
+    price: float
+    max_pages: int
+    description: str
+
+# Example plans
 PLANS = {
-    "free": SubscriptionPlan(
-        name="رایگان",
-        price=0,
-        max_pages=5,  # حداکثر 5 صفحه
-        description="حداکثر ۵ صفحه در ماه"
-    ),
-    "basic": SubscriptionPlan(
-        name="پایه",
-        price=50000,
-        max_pages=50,  # حداکثر 50 صفحه
-        description="ماهانه ۵۰,۰۰۰ تومان برای ۵۰ صفحه"
-    ),
-    "pro": SubscriptionPlan(
-        name="حرفه‌ای",
-        price=200000,
-        max_pages=300,  # حداکثر 300 صفحه
-        description="ماهانه ۲۰۰,۰۰۰ تومان برای ۳۰۰ صفحه"
-    ),
+    "free": Plan(name="Free", price=0, max_pages=5, description="پلن رایگان"),
+    "basic": Plan(name="Basic", price=10, max_pages=50, description="پلن پایه"),
+    "pro": Plan(name="Pro", price=30, max_pages=200, description="پلن حرفه‌ای"),
 }

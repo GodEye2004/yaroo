@@ -9,6 +9,7 @@ import PyPDF2
 from io import BytesIO
 import chardet
 from docx import Document
+from sqlalchemy import text
 
 from services.subscribtion_service import (
     check_and_reset_subscription, 
@@ -18,7 +19,10 @@ from services.subscribtion_service import (
 )
 from services.pdf_extraction import process_pdf_advanced  # ✅ تغییر اینجا
 from services.text_processing import deep_clean_farsi_text
-from db_config import supabase
+from db_config import AsyncSessionLocal
+
+from types import SimpleNamespace
+
 
 router = APIRouter()
 
@@ -36,6 +40,13 @@ async def upload_json(
         category: str = Form(...),
         file: UploadFile = File(...)
 ):
+    # 1. Verify subscription
+    subscription = await check_and_reset_subscription(user_id)
+    if not subscription or subscription.pages_remaining <= 0 or not subscription.is_active:
+        return JSONResponse(
+            status_code=402,
+            content={"error": "لطفا ابتدا اشتراک خود را انتخاب کنید"}
+        )
     print("=" * 60)
     print(f"📥 UPLOAD_JSON RECEIVED")
     print(f"👤 User ID: {user_id}")
@@ -143,22 +154,62 @@ async def upload_json(
         else:
             print(f"ℹ️ صفحات کسر نمی‌شود (پلن رایگان)")
 
-        # 6. ذخیره داده‌ها در Supabase
         related_data = []
-        existing = supabase.table("ai_assist").select("*").eq("user_id", user_id).execute()
-        if existing.data:
-            supabase.table("ai_assist").update({
-                "category": category,
-                "data": json_data,
-                "related_sources": related_data
-            }).eq("user_id", user_id).execute()
-        else:
-            supabase.table("ai_assist").insert({
-                "user_id": user_id,
-                "category": category,
-                "data": json_data,
-                "related_sources": related_data
-            }).execute()
+        # Use AsyncSessionLocal to read/write ai_assist in Postgres (sva)
+        existing = SimpleNamespace(data=None)
+
+        async with AsyncSessionLocal() as session:
+            # find existing record
+            result = await session.execute(
+                text("SELECT * FROM ai_assist WHERE user_id = :user_id LIMIT 1"),
+                {"user_id": user_id}
+            )
+            row = result.fetchone()
+            if row:
+                mapping = dict(row._mapping) if hasattr(row, "_mapping") else dict(row)
+                existing.data = mapping.get("data")
+
+                # update existing record
+                await session.execute(
+                    text(
+                        """
+                        UPDATE ai_assist
+                        SET category = :category,
+                            data = :data,
+                            related_sources = :related
+                        WHERE user_id = :user_id
+                        """
+                    ),
+                    {
+                        "category": category,
+                        "data": json.dumps(json_data, ensure_ascii=False),
+                        "related": json.dumps(related_data, ensure_ascii=False),
+                        "user_id": user_id
+                    }
+                )
+            else:
+                existing.data = None
+                # insert new record
+                await session.execute(
+                    text(
+                        """
+                        INSERT INTO ai_assist (user_id, category, data, related_sources)
+                        VALUES (:user_id, :category, :data, :related)
+                        """
+                    ),
+                    {
+                        "user_id": user_id,
+                        "category": category,
+                        "data": json.dumps(json_data, ensure_ascii=False),
+                        "related": json.dumps(related_data, ensure_ascii=False)
+                    }
+                )
+
+            await session.commit()
+
+        # Persist to Postgres (ai_assist table) using AsyncSessionLocal from db_config
+        # The insert/update has already been performed in the previous block;
+        # this duplicate block was removed to avoid indentation and logic errors.
 
         plan = PLANS.get(subscription.plan_type)
         response = {
@@ -184,7 +235,7 @@ async def upload_json(
             "json_data_preview": json.dumps(json_data, ensure_ascii=False)[:500] if isinstance(json_data, dict) else str(json_data)[:500],
         }
 
-        print("✅ آپلود با موفقیت انجام شد")
+        print("upload succesfully!")
         print("=" * 60)
         
         return response

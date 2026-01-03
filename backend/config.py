@@ -9,9 +9,8 @@ load_dotenv()
 # API Keys
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
-# Supabase
-SUPABASE_URL = os.getenv("SUPABASE_URL", "https://hfkcxtntiltfqnofylkw.supabase.co")
-SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY")
+
+
 
 # App Settings
 MAX_CHUNK_SIZE = 1000

@@ -11,4 +11,4 @@ class TenatData(Base):
     user_id = Column(String, index=True, nullable=False)
     category = Column(String, nullable=False)
     data = Column(JSON, nullable=False)
-    related_sources = Column(JSON, default=[])
+    related_sources = Column(JSON, nullable=False,default=[])
