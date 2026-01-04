@@ -77,13 +77,13 @@ async def check_and_reset_subscription(user_id: str) -> Optional[UserSubscriptio
                 is_active=row.is_active
             )
 
-            # Reset pages if 30 days passed
+            # Reset pages if 365 days passed
             now = datetime.now(timezone.utc)
             last_reset = subscription.last_reset
             if last_reset.tzinfo is None:
                 last_reset = last_reset.replace(tzinfo=timezone.utc)
 
-            if (now - last_reset) >= timedelta(days=30):
+            if (now - last_reset) >= timedelta(days=365):
                 plan = PLANS.get(subscription.plan_type)
                 pages_to_reset = plan.max_pages if plan.plan_type != "free" else plan.max_pages
                 await session.execute(
