@@ -46,7 +46,10 @@ RUN pip install --upgrade pip && \
     arabic-reshaper==3.0.0\
     python-bidi==0.4.2 \
     camelot-py\
-    greenlet==3.3.0
+    greenlet==3.3.0\
+    sqlalchemy\
+    psycopg2-binary\
+    asyncpg
 
 
 # کپی کد

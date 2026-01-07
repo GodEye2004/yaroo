@@ -26,3 +26,6 @@ python-bidi==0.4.2
 camelot-py
 # new
 greenlet==3.3.0
+psycopg2-binary
+sqlalchemy
+asyncpg
