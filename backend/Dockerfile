@@ -45,7 +45,9 @@ RUN pip install --upgrade pip && \
     pdfplumber==0.10.3\
     arabic-reshaper==3.0.0\
     python-bidi==0.4.2 \
-    camelot-py
+    camelot-py\
+    greenlet==3.3.0
+
 
 # کپی کد
 COPY . .

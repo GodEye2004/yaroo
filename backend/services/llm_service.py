@@ -12,14 +12,13 @@ ENDPOINT = "https://models.inference.ai.azure.com"
 MODEL_NAME = "gpt-4o"
 
 async def github_llm(prompt: str) -> str:
-    # بررسی طول پرامپت قبل از ارسال
+    
     estimated_tokens = estimate_tokens(prompt)
     print(f"📊 تخمین تعداد توکن‌های پرامپت: {estimated_tokens}")
 
-    if estimated_tokens > 7000:  # حد امن کمتر از 8000
+    if estimated_tokens > 7000:  
         print(f"⚠️ پرامپت خیلی بزرگ است ({estimated_tokens} توکن). در حال کوتاه کردن...")
-        # اگر پرامپت خیلی بزرگ بود، آن را کوتاه کن
-        prompt = prompt[:28000]  # حدود 7000 توکن
+        prompt = prompt[:28000]  
 
     client = ChatCompletionsClient(
         endpoint=ENDPOINT,
