@@ -8,6 +8,15 @@ from services.text_processing import deep_clean_farsi_text
 import arabic_reshaper
 from bidi.algorithm import get_display
 
+# Try to import RapidOCR, handle case if not installed yet
+try:
+    from rapidocr_onnxruntime import RapidOCR
+    ocr_engine = RapidOCR()
+    HAS_OCR = True
+except ImportError:
+    HAS_OCR = False
+    print("⚠️ RapidOCR not installed. OCR fallback will be disabled.")
+
 def extract_with_pymupdf(pdf_path: str, max_pages: int = None) -> dict:
     """استخراج متن با PyMuPDF - بهترین روش برای فارسی"""
     context = ""
@@ -179,6 +188,69 @@ def extract_with_pdfplumber(pdf_path: str, max_pages: int = None) -> dict:
         print(f"❌ خطا در pdfplumber: {str(e)}")
         return {"success": False, "error": str(e)}
 
+def extract_with_ocr(pdf_path: str, max_pages: int = None) -> dict:
+    """استخراج متن با OCR - برای فایل‌های اسکن شده"""
+    if not HAS_OCR:
+        return {"success": False, "error": "Library rapidocr-onnxruntime not installed"}
+        
+    context = ""
+    context_blocks = []
+    
+    try:
+        doc = fitz.open(pdf_path)
+        total_pages = len(doc)
+        pages_to_process = min(max_pages, total_pages) if max_pages else total_pages
+        
+        print(f"📷 شروع پردازش OCR برای {pages_to_process} صفحه...")
+        
+        for page_num in range(pages_to_process):
+            page = doc.load_page(page_num)
+            
+            # تبدیل صفحه به تصویر با کیفیت بالا (zoom=2)
+            mat = fitz.Matrix(2, 2)
+            pix = page.get_pixmap(matrix=mat)
+            img_bytes = pix.tobytes("png")
+            
+            # اجرای OCR
+            result, elapse = ocr_engine(img_bytes)
+            
+            if result:
+                # نتیجه لیست شامل [تخت، جعبه، امتیاز] است
+                page_text = "\n".join([line[1] for line in result])
+                
+                if page_text:
+                    # اصلاح و پاکسازی
+                    text = fix_farsi_text_issues(page_text)
+                    text = normalize_farsi_text(text)
+                    cleaned_text = deep_clean_farsi_text(text)
+                    
+                    if cleaned_text and len(cleaned_text.strip()) > 10:
+                        context += cleaned_text + "\n\n"
+                        context_blocks.append({
+                            "page": page_num + 1,
+                            "text": cleaned_text,
+                            "char_count": len(cleaned_text),
+                            "word_count": len(cleaned_text.split()),
+                            "method": "rapidocr"
+                        })
+        
+        doc.close()
+        
+        return {
+            "success": True,
+            "text": context,
+            "blocks": context_blocks,
+            "method": "rapidocr",
+            "total_chars": len(context),
+            "total_pages": len(context_blocks)
+        }
+        
+    except Exception as e:
+        print(f"❌ خطا در OCR: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return {"success": False, "error": str(e)}
+
 def contains_farsi(text: str) -> bool:
     """بررسی اینکه آیا متن شامل حروف فارسی است"""
     farsi_pattern = re.compile(r'[\u0600-\u06FF\uFB50-\uFDFF\uFE70-\uFEFF]')
@@ -255,6 +327,19 @@ def fix_farsi_text_issues(text: str) -> str:
     # 5. اصلاح نقطه‌گذاری
     text = re.sub(r'\s*\.\s*', '. ', text)
     text = re.sub(r'\s*،\s*', '، ', text)
+
+    # 6. اصلاح پیشوندها و پسوندهای جدا افتاده (Heuristics)
+    # اتصال "می" و "نمی" به فعل بعدی
+    # Note: (?<=^|\s) is invalid in Python because ^ is zero-width and \s is not.
+    # We use capturing group (^|\s) instead.
+    # IMPORTANT: Replacement string must NOT be raw string if we use \u escape
+    text = re.sub(r'(^|\s)(می|نمی)\s+(?=[آ-ی])', '\\1\\2\u200c', text)
+    
+    # اتصال "ها" و "های" به کلمه قبلی
+    text = re.sub(r'(?<=[آ-ی])\s+(ها|های)(?=\s|$|\.|،)', '\u200c\\1', text)
+    
+    # اتصال "تر" و "ترین"
+    text = re.sub(r'(?<=[آ-ی])\s+(تر|ترین)(?=\s|$|\.|،)', '\u200c\\1', text)
     
     return text
 
@@ -285,7 +370,12 @@ async def process_pdf_advanced(content: bytes, max_pages: int = None) -> dict:
                 word_count = len(result["text"].split())
                 
                 # محاسبه امتیاز کیفیت
-                quality_score = text_length + (word_count * 2)
+                # فرمول: طول متن + امتیاز کلمات
+                # اگر متن خیلی کوتاه باشد، امتیاز منفی می‌گیرد
+                if text_length < 50:
+                    quality_score = 0
+                else:
+                    quality_score = text_length + (word_count * 2)
                 
                 results.append({
                     "method": method_name,
@@ -304,6 +394,31 @@ async def process_pdf_advanced(content: bytes, max_pages: int = None) -> dict:
                 
         except Exception as e:
             print(f"❌ خطا در {method_name}: {str(e)}")
+            
+    # اگر نتیجه ضعیف بود و OCR داریم، OCR را تست کن
+    if (not best_result or max_quality_score < 200) and HAS_OCR:
+        print("⚠️ کیفیت استخراج پایین بود. تلاش با OCR...")
+        try:
+            ocr_result = extract_with_ocr(pdf_path, max_pages)
+            if ocr_result["success"]:
+                text_length = len(ocr_result["text"].strip())
+                # OCR معمولاً دقیق‌تر است برای اسکن، پس ضریب بالاتر
+                quality_score = text_length * 3 
+                
+                results.append({
+                    "method": "RapidOCR",
+                    "chars": text_length,
+                    "words": len(ocr_result["text"].split()),
+                    "score": quality_score
+                })
+                
+                if quality_score > max_quality_score:
+                    print(f"✅ OCR نتیجه بهتری داد: {text_length} کاراکتر")
+                    best_result = ocr_result
+                else:
+                     print(f"ℹ️ OCR هم نتیجه بهتری نداشت ({text_length} کاراکتر)")
+        except Exception as e:
+             print(f"❌ خطا در اجرای OCR: {e}")
     
     # حذف فایل موقت
     try:

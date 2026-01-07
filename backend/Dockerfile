@@ -1,66 +1,32 @@
-# Dockerfile - با نسخه‌های سازگار
+# Use an official Python runtime as a parent image
 FROM python:3.11-slim
 
-# نصب dependencies سیستمی
-RUN apt-get update && apt-get install -y \
-    gcc \
-    g++ \
-    libpq-dev \
-    poppler-utils \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
-
-WORKDIR /app
-
-# کپی requirements
-COPY requirements.txt .
-
-# نصب پکیج‌ها به ترتیب برای جلوگیری از conflict
-RUN pip install --upgrade pip && \
-    pip install --no-cache-dir \
-    # ابتدا azure packages
-    azure-core==1.30.0 \
-    azure-identity==1.15.0 \
-    azure-ai-inference==1.0.0b4 \
-    # سپس بقیه
-    fastapi==0.104.1 \
-    uvicorn[standard]==0.24.0 \
-    httpx==0.24.1 \
-    # و بقیه
-    python-dotenv==1.0.0 \
-    python-multipart==0.0.6 \
-    chardet==5.2.0 \
-    beautifulsoup4==4.12.2 \
-    hazm==0.9.1 \
-    # langchain با نسخه سازگار community
-    langchain==0.1.16 \
-    langchain-community==0.0.32 \
-    PyPDF2==3.0.1 \
-    python-docx==1.1.0 \
-    numpy==1.26.3 \
-    scikit-learn==1.5.2 \
-    pandas==2.1.4\
-    pypdf==3.17.4\
-    pymupdf==1.23.8\
-    pdfplumber==0.10.3\
-    arabic-reshaper==3.0.0\
-    python-bidi==0.4.2 \
-    camelot-py\
-    greenlet==3.3.0\
-    sqlalchemy\
-    psycopg2-binary\
-    asyncpg
-
-
-# کپی کد
-COPY . .
-
-# ساختار دایرکتوری
-RUN mkdir -p /app/uploads /app/temp
-
+# Set environment variables
+ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONPATH=/app
 
+# Set work directory
+WORKDIR /app
+
+# Install system dependencies
+# libgl1 and libglib2.0-0 are required for opencv/rapidocr
+RUN apt-get update && apt-get install -y     gcc     g++     libpq-dev     poppler-utils     libgl1     libglib2.0-0     && apt-get clean     && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements file
+COPY requirements.txt .
+
+# Install python dependencies
+RUN pip install --upgrade pip &&     pip install --no-cache-dir -r requirements.txt
+
+# Copy project
+COPY . .
+
+# Create directories for uploads/temp if they don't exist
+RUN mkdir -p /app/uploads /app/temp
+
+# Expose port
 EXPOSE 8000
 
+# Run the application
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
