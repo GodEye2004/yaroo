@@ -12,13 +12,12 @@ ENDPOINT = "https://models.inference.ai.azure.com"
 MODEL_NAME = "gpt-4o"
 
 async def github_llm(prompt: str) -> str:
-    
     estimated_tokens = estimate_tokens(prompt)
     print(f"📊 تخمین تعداد توکن‌های پرامپت: {estimated_tokens}")
 
-    if estimated_tokens > 7000:  
+    if estimated_tokens > 7000:
         print(f"⚠️ پرامپت خیلی بزرگ است ({estimated_tokens} توکن). در حال کوتاه کردن...")
-        prompt = prompt[:28000]  
+        prompt = prompt[:28000]
 
     client = ChatCompletionsClient(
         endpoint=ENDPOINT,
@@ -28,21 +27,15 @@ async def github_llm(prompt: str) -> str:
     final_text = ""
 
     try:
-        maybe_async = client.complete(
-            stream=True,
+        response = client.complete(
+            stream=False,
             messages=[UserMessage(content=prompt)],
             model=MODEL_NAME,
             temperature=0.3
         )
 
-        if hasattr(maybe_async, "__aiter__"):
-            async for update in maybe_async:
-                if update.choices and update.choices[0].delta and update.choices[0].delta.content:
-                    final_text += update.choices[0].delta.content
-        else:
-            for update in maybe_async:
-                if update.choices and update.choices[0].delta and update.choices[0].delta.content:
-                    final_text += update.choices[0].delta.content
+        if response.choices and response.choices[0].message and response.choices[0].message.content:
+            final_text = response.choices[0].message.content
 
     except Exception as e:
         raise Exception(f"Azure AI Inference returned error: {str(e)}")
@@ -55,6 +48,3 @@ async def github_llm(prompt: str) -> str:
                     await maybe_awaitable
 
     return final_text.strip()
-
-
-
