@@ -2,7 +2,7 @@ import io
 import tempfile
 import os
 import re
-import fitz  # PyMuPDF
+import fitz  
 import pdfplumber
 from services.text_processing import deep_clean_farsi_text
 import arabic_reshaper
