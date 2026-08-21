@@ -4,7 +4,7 @@ import os
 import re
 import fitz  
 import pdfplumber
-from services.text_processing import deep_clean_farsi_text
+from services.text_processing import deep_clean_farsi_text, looks_garbled
 import arabic_reshaper
 from bidi.algorithm import get_display
 
@@ -284,45 +284,38 @@ def normalize_farsi_text(text: str) -> str:
     text = re.sub(r' +', ' ', text)
     text = re.sub(r'\n\n+', '\n\n', text)
     
-    # 5. اصلاح نیم‌فاصله
-    text = text.replace('\u200c', ' ')  # حذف نیم‌فاصله نامرئی
-    
     return text.strip()
 
 def fix_farsi_text_issues(text: str) -> str:
     """اصلاح مشکلات خاص استخراج PDF فارسی"""
     if not text:
         return ""
-    
-    # 1. اصلاح کلمات معیوب رایج
-    common_fixes = {
-        'ققی': 'قرارداد',
-        'صی': 'سرمایه',
-        'قیی': 'شرکت',
-        'هرمی': 'سهامی',
-        'خ صی': 'خصوصی',
-        'پی': 'پذیر',
-        'مسو': 'مسئول',
-        'تمی': 'تمام',
-        'قعفه': 'قطعه',
-        'نگر': 'نگار',
-        'هوم': 'عموم',
-        'مدی': 'مدیر',
-        'عمل': 'عامل',
-        'دا رودی': 'داوردی',
-    }
-    
-    for wrong, correct in common_fixes.items():
-        text = text.replace(wrong, correct)
-    
-    # 2. اصلاح شماره‌های تلفن معیوب
+
+    if looks_garbled(text):
+        common_fixes = {
+            'ققی': 'قرارداد',
+            'صی': 'سرمایه',
+            'قیی': 'شرکت',
+            'هرمی': 'سهامی',
+            'خ صی': 'خصوصی',
+            'پی': 'پذیر',
+            'مسو': 'مسئول',
+            'تمی': 'تمام',
+            'قعفه': 'قطعه',
+            'نگر': 'نگار',
+            'هوم': 'عموم',
+            'مدی': 'مدیر',
+            'دا رودی': 'داوردی',
+        }
+        for wrong, correct in common_fixes.items():
+            text = text.replace(wrong, correct)
+        text = re.sub(r'([آ-ی])\s+([آ-ی])', r'\1\2', text)
+
+    # اصلاح شماره‌های تلفن معیوب
     text = re.sub(r'(\d{2,3})\s+(\d{3,4})\s+(\d{4})', r'\1-\2-\3', text)
-    
-    # 3. اصلاح ایمیل‌های معیوب
+
+    # اصلاح ایمیل‌های معیوب
     text = re.sub(r'(\w+)\s*@\s*(\w+)\s*\.\s*(\w+)', r'\1@\2.\3', text)
-    
-    # 4. حذف کاراکترهای اضافی بین کلمات
-    text = re.sub(r'([آ-ی])\s+([آ-ی])', r'\1\2', text)
     
     # 5. اصلاح نقطه‌گذاری
     text = re.sub(r'\s*\.\s*', '. ', text)

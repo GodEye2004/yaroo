@@ -1,32 +1,22 @@
-"""
-تنظیمات اصلی برنامه
-"""
+from pathlib import Path
 import os
+
 from dotenv import load_dotenv
 
-load_dotenv()
+_backend_dir = Path(__file__).resolve().parent
+load_dotenv(_backend_dir / ".env")
+load_dotenv(_backend_dir.parent / ".env")
 
-# API Keys
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
+ENDPOINT = os.getenv("ENDPOINT", "https://models.inference.ai.azure.com")
+MODEL_NAME = os.getenv("MODEL_NAME", "gpt-4o")
 
-
-
-
-# App Settings
 MAX_CHUNK_SIZE = 1000
-MAX_MEMORY = 5  # حافظه مکالمه
-
-# CORS Settings
+MAX_MEMORY = 5
 ALLOWED_ORIGINS = ["*"]
-
-# Performance Settings
 TIMEOUT_KEEP_ALIVE = 120
-LIMIT_CONCURRENCY = 100  # افزایش برای تست فشار
-LIMIT_MAX_REQUESTS = 1000  # افزایش برای تست فشار
-
-# File Processing
-MAX_FILE_SIZE_MB = 50  # حداکثر حجم فایل به مگابایت
+LIMIT_CONCURRENCY = 100
+LIMIT_MAX_REQUESTS = 1000
+MAX_FILE_SIZE_MB = 50
 TEMP_DIR = "/tmp"
-
-# Logging
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")

@@ -10,5 +10,5 @@ services:
         sync: false
       - key: SUPABASE_SERVICE_KEY
         sync: false
-    healthCheckPath: /docs
+    healthCheckPath: /health
     autoDeploy: true
